@@ -112,6 +112,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           ListView(
             children: [
+              _sectionTitle('Görünüm'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: ValueListenableBuilder<ThemeMode>(
+                  valueListenable: AppRepository.instance.themeMode,
+                  builder: (context, mode, _) => SegmentedButton<ThemeMode>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: ThemeMode.system, label: Text('Sistem')),
+                      ButtonSegment(value: ThemeMode.light, label: Text('Açık')),
+                      ButtonSegment(value: ThemeMode.dark, label: Text('Koyu')),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (s) =>
+                        AppRepository.instance.setThemeMode(s.first),
+                  ),
+                ),
+              ),
+              const Divider(),
+              _sectionTitle('Okuma hedefi'),
+              ValueListenableBuilder<int>(
+                valueListenable: AppRepository.instance.yearlyGoal,
+                builder: (context, goal, _) => ListTile(
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Yıllık okuma hedefi'),
+                  subtitle: Text(goal > 0 ? '$goal kitap' : 'Belirlenmedi'),
+                  trailing: goal > 0
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () =>
+                              AppRepository.instance.setYearlyGoal(0),
+                        )
+                      : null,
+                  onTap: () async {
+                    final v = await _promptNumber(
+                        'Yıllık hedef (kaç kitap)', goal);
+                    if (v != null) {
+                      await AppRepository.instance.setYearlyGoal(v);
+                    }
+                  },
+                ),
+              ),
+              const Divider(),
+              _sectionTitle('Kitap arama'),
+              ListTile(
+                leading: const Icon(Icons.vpn_key_outlined),
+                title: const Text('Google Books API anahtarı'),
+                subtitle: Text(AppRepository.instance.googleApiKey.isNotEmpty
+                    ? 'Ekli — Google kotasız çalışır'
+                    : 'Ekli değil (opsiyonel; 429 kotasını kaldırır)'),
+                onTap: _editGoogleKey,
+              ),
+              const Divider(),
               _sectionTitle('Yedekleme'),
               ListTile(
                 leading: const Icon(Icons.upload_file_outlined),
@@ -151,6 +204,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<int?> _promptNumber(String title, int initial) {
+    final controller =
+        TextEditingController(text: initial > 0 ? initial.toString() : '');
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(ctx, int.tryParse(controller.text.trim())),
+            child: const Text('Kaydet'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editGoogleKey() async {
+    final controller =
+        TextEditingController(text: AppRepository.instance.googleApiKey);
+    // null = iptal, '' = temizle, dolu = kaydet
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Google Books API anahtarı'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Anahtar eklersen Google Books kotasız çalışır (429 hatası biter). '
+              'Nasıl alınır: README → "Kitap arama kaynakları". '
+              'Ücretsizdir, kredi kartı gerekmez.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'API anahtarı',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('Temizle')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Kaydet'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || !mounted) return; // iptal
+    await AppRepository.instance.setGoogleApiKey(result);
+    if (!mounted) return;
+    setState(() {});
+    _snack(result.isEmpty ? 'Anahtar temizlendi.' : 'Anahtar kaydedildi.');
   }
 
   Widget _sectionTitle(String text) => Padding(

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../data/app_repository.dart';
+
 /// Kitap aramasından dönen tek bir sonuç.
 class BookSearchResult {
   final String title;
@@ -33,10 +35,15 @@ class BookSearchResult {
 class BookSearchService {
   static const Duration _timeout = Duration(seconds: 12);
 
-  /// Derleme sırasında `--dart-define=GOOGLE_BOOKS_API_KEY=...` ile verilir.
-  /// Boşsa Google Books anahtarsız (paylaşılan kota → sık 429) kullanılır.
-  static const String _googleKey =
-      String.fromEnvironment('GOOGLE_BOOKS_API_KEY');
+  /// Derleme zamanı varsayılanı (`--dart-define=GOOGLE_BOOKS_API_KEY=...`).
+  static const String _envKey = String.fromEnvironment('GOOGLE_BOOKS_API_KEY');
+
+  /// Etkin anahtar: önce kullanıcının Ayarlar'dan girdiği, yoksa derleme
+  /// zamanı verilen; ikisi de boşsa anahtarsız (paylaşılan kota → sık 429).
+  String get _googleKey {
+    final runtime = AppRepository.instance.googleApiKey;
+    return runtime.isNotEmpty ? runtime : _envKey;
+  }
 
   Future<List<BookSearchResult>> search(String query) async {
     final q = query.trim();

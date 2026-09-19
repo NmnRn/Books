@@ -31,13 +31,16 @@ class StatisticsScreen extends StatelessWidget {
               ),
             );
           }
-          return _buildStats(context, books);
+          return ValueListenableBuilder<int>(
+            valueListenable: repo.yearlyGoal,
+            builder: (context, goal, _) => _buildStats(context, books, goal),
+          );
         },
       ),
     );
   }
 
-  Widget _buildStats(BuildContext context, List<Book> books) {
+  Widget _buildStats(BuildContext context, List<Book> books, int goal) {
     final scheme = Theme.of(context).colorScheme;
 
     final read =
@@ -88,6 +91,10 @@ class StatisticsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (goal > 0) ...[
+          _goalCard(context, finishedThisYear, goal),
+          const SizedBox(height: 16),
+        ],
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -135,6 +142,51 @@ class StatisticsScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _goalCard(BuildContext context, int done, int goal) {
+    final progress = (done / goal).clamp(0.0, 1.0);
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.flag, color: scheme.onPrimaryContainer),
+                const SizedBox(width: 8),
+                Text('${DateTime.now().year} okuma hedefi',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: scheme.onPrimaryContainer)),
+                const Spacer(),
+                Text('$done / $goal',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: scheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(value: progress, minHeight: 12),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              done >= goal
+                  ? 'Hedefe ulaştın! 🎉'
+                  : '%${(progress * 100).round()} tamam — ${goal - done} kitap kaldı',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onPrimaryContainer),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

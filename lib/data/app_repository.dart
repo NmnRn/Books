@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/book.dart';
@@ -16,20 +16,33 @@ class AppRepository {
 
   static const String _booksBox = 'books';
   static const String _tasksBox = 'tasks';
+  static const String _settingsBox = 'settings';
 
   late final Box<String> _books;
   late final Box<String> _tasks;
+  late final Box<String> _settings;
 
   /// Ekranlar bu notifier'ları dinleyerek otomatik güncellenir.
   final ValueNotifier<List<Book>> books = ValueNotifier<List<Book>>([]);
   final ValueNotifier<List<Task>> tasks = ValueNotifier<List<Task>>([]);
+  final ValueNotifier<ThemeMode> themeMode =
+      ValueNotifier<ThemeMode>(ThemeMode.system);
+  final ValueNotifier<int> yearlyGoal = ValueNotifier<int>(0);
 
   Future<void> init() async {
     await Hive.initFlutter();
     _books = await Hive.openBox<String>(_booksBox);
     _tasks = await Hive.openBox<String>(_tasksBox);
+    _settings = await Hive.openBox<String>(_settingsBox);
     _reloadBooks();
     _reloadTasks();
+
+    final storedTheme = _settings.get('themeMode');
+    themeMode.value = ThemeMode.values.firstWhere(
+      (e) => e.name == storedTheme,
+      orElse: () => ThemeMode.system,
+    );
+    yearlyGoal.value = int.tryParse(_settings.get('yearlyGoal') ?? '') ?? 0;
   }
 
   /// Yeni kayıtlar için benzersiz kimlik.
@@ -124,5 +137,24 @@ class AppRepository {
     _reloadBooks();
     _reloadTasks();
     return bookList.length + taskList.length;
+  }
+
+  // ---------------- Ayarlar ----------------
+
+  /// Google Books API anahtarı (kullanıcı Ayarlar'dan girer). Boşsa anahtarsız.
+  String get googleApiKey => _settings.get('googleApiKey') ?? '';
+
+  Future<void> setGoogleApiKey(String value) =>
+      _settings.put('googleApiKey', value.trim());
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    await _settings.put('themeMode', mode.name);
+    themeMode.value = mode;
+  }
+
+  Future<void> setYearlyGoal(int goal) async {
+    final g = goal < 0 ? 0 : goal;
+    await _settings.put('yearlyGoal', g.toString());
+    yearlyGoal.value = g;
   }
 }

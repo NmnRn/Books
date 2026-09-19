@@ -19,13 +19,16 @@ class BookTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Okuma Defteri',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
-      home: const HomeShell(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppRepository.instance.themeMode,
+      builder: (context, mode, _) => MaterialApp(
+        title: 'Okuma Defteri',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: mode,
+        home: const HomeShell(),
+      ),
     );
   }
 }
