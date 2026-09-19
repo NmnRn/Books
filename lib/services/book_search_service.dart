@@ -22,28 +22,37 @@ class BookSearchResult {
 }
 
 /// Birden fazla ücretsiz/anahtarsız kaynaktan kitap arar ve sonuçları
-/// birleştirir: **Google Books + Open Library + Apple Books (iTunes)**.
+/// birleştirir:
+///   * Google Books   (en zengin; anahtar varsa kotasız)
+///   * Open Library   (anahtarsız, kotasız)
+///   * Internet Archive (archive.org; Türkçe kapsamı iyi)
+///   * Apple Books    (iTunes; zayıf, en sonda)
 ///
-/// Üç kaynak paralel sorgulanır; biri hata verirse (ör. Google'ın günlük
-/// kotası dolarsa) diğerleri yine de sonuç döndürür. Sonuçlar başlık+yazara
-/// göre tekilleştirilir; en zengin veriyi veren kaynak (Google) önceliklidir.
+/// Kaynaklar paralel sorgulanır; biri hata verse (ör. Google kotası) diğerleri
+/// yine sonuç döndürür. Sonuçlar başlık+yazara göre tekilleştirilir.
 class BookSearchService {
   static const Duration _timeout = Duration(seconds: 12);
+
+  /// Derleme sırasında `--dart-define=GOOGLE_BOOKS_API_KEY=...` ile verilir.
+  /// Boşsa Google Books anahtarsız (paylaşılan kota → sık 429) kullanılır.
+  static const String _googleKey =
+      String.fromEnvironment('GOOGLE_BOOKS_API_KEY');
 
   Future<List<BookSearchResult>> search(String query) async {
     final q = query.trim();
     if (q.isEmpty) return [];
 
+    // Öncelik sırası = birleştirme sırası.
     final lists = await Future.wait([
       _safe(_searchGoogle(q)),
       _safe(_searchOpenLibrary(q)),
+      _safe(_searchArchive(q)),
       _safe(_searchAppleBooks(q)),
     ]);
 
     return _merge(lists);
   }
 
-  /// Hata veren kaynağı boş listeye çevirir (diğerleri etkilenmesin).
   Future<List<BookSearchResult>> _safe(Future<List<BookSearchResult>> f) async {
     try {
       return await f;
@@ -52,7 +61,6 @@ class BookSearchService {
     }
   }
 
-  /// Kaynakları öncelik sırasıyla birleştirir, kopyaları eler.
   List<BookSearchResult> _merge(List<List<BookSearchResult>> lists) {
     final seen = <String>{};
     final out = <BookSearchResult>[];
@@ -61,7 +69,7 @@ class BookSearchService {
         if (seen.add(_dedupeKey(r))) out.add(r);
       }
     }
-    return out.take(40).toList();
+    return out.take(50).toList();
   }
 
   String _dedupeKey(BookSearchResult r) {
@@ -70,11 +78,12 @@ class BookSearchService {
     return '${norm(r.title)}|${norm(r.authors.split(',').first)}';
   }
 
-  // ---- Google Books (en zengin: açıklama + sayfa) ----
+  // ---- Google Books ----
   Future<List<BookSearchResult>> _searchGoogle(String q) async {
+    final keyParam = _googleKey.isNotEmpty ? '&key=$_googleKey' : '';
     final uri = Uri.parse(
       'https://www.googleapis.com/books/v1/volumes'
-      '?q=${Uri.encodeQueryComponent(q)}&maxResults=20&country=TR',
+      '?q=${Uri.encodeQueryComponent(q)}&maxResults=20&country=TR$keyParam',
     );
     final res = await http.get(uri).timeout(_timeout);
     if (res.statusCode != 200) throw Exception('Google Books ${res.statusCode}');
@@ -100,7 +109,7 @@ class BookSearchService {
     }).toList();
   }
 
-  // ---- Open Library (anahtarsız, kotasız) ----
+  // ---- Open Library ----
   Future<List<BookSearchResult>> _searchOpenLibrary(String q) async {
     final uri = Uri.parse(
       'https://openlibrary.org/search.json'
@@ -129,7 +138,46 @@ class BookSearchService {
     }).toList();
   }
 
-  // ---- Apple Books / iTunes Search (anahtarsız, kotasız) ----
+  // ---- Internet Archive (archive.org) ----
+  Future<List<BookSearchResult>> _searchArchive(String q) async {
+    final query = Uri.encodeQueryComponent('title:($q) AND mediatype:texts');
+    final uri = Uri.parse(
+      'https://archive.org/advancedsearch.php?q=$query'
+      '&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator'
+      '&rows=15&output=json',
+    );
+    final res = await http.get(uri).timeout(_timeout);
+    if (res.statusCode != 200) throw Exception('Archive ${res.statusCode}');
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final docs =
+        ((data['response'] as Map<String, dynamic>?)?['docs'] as List?) ??
+            const [];
+    return docs
+        .map((raw) {
+          final doc = raw as Map<String, dynamic>;
+          final id = doc['identifier'] as String? ?? '';
+          final rawTitle = doc['title'];
+          final title = rawTitle is List
+              ? (rawTitle.isNotEmpty ? rawTitle.first.toString() : 'Başlıksız')
+              : (rawTitle as String? ?? 'Başlıksız');
+          final rawCreator = doc['creator'];
+          var author = rawCreator is List
+              ? rawCreator.cast<String>().join(', ')
+              : (rawCreator as String? ?? '');
+          if (author.length > 60) author = ''; // etiket çöplüğünü ele
+          return BookSearchResult(
+            title: title,
+            authors: author,
+            thumbnailUrl:
+                id.isNotEmpty ? 'https://archive.org/services/img/$id' : null,
+            source: 'Internet Archive',
+          );
+        })
+        .where((r) => r.title.isNotEmpty)
+        .toList();
+  }
+
+  // ---- Apple Books / iTunes Search ----
   Future<List<BookSearchResult>> _searchAppleBooks(String q) async {
     final uri = Uri.parse(
       'https://itunes.apple.com/search'
@@ -141,7 +189,6 @@ class BookSearchService {
     final results = (data['results'] as List?) ?? const [];
     return results.map((raw) {
       final m = raw as Map<String, dynamic>;
-      // 100x100 kapağı daha büyük sürümle değiştir.
       final art =
           (m['artworkUrl100'] as String?)?.replaceFirst('100x100bb', '400x400bb');
       return BookSearchResult(

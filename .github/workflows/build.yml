@@ -59,7 +59,9 @@ jobs:
           echo "Release imzalama anahtarı hazır."
 
       - name: APK derle (release)
-        run: flutter build apk --release
+        # GOOGLE_BOOKS_API_KEY secret'ı varsa Google Books kotasız çalışır;
+        # yoksa boş geçer (anahtarsız, paylaşılan kota).
+        run: flutter build apk --release --dart-define=GOOGLE_BOOKS_API_KEY=${{ secrets.GOOGLE_BOOKS_API_KEY }}
 
       - name: APK'yı yükle (artifact)
         uses: actions/upload-artifact@v4
