@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../data/app_repository.dart';
 import '../models/task.dart';
+import '../services/image_storage.dart';
+import '../utils/date_format.dart';
+import 'task_edit_screen.dart';
 
 /// Yapılacaklar (to-do) ekranı.
 class TasksScreen extends StatelessWidget {
@@ -26,115 +31,94 @@ class TasksScreen extends StatelessWidget {
           }
           return ListView.builder(
             itemCount: tasks.length,
-            itemBuilder: (context, i) {
-              final t = tasks[i];
-              return Dismissible(
-                key: ValueKey(t.id),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  child: Icon(Icons.delete,
-                      color: Theme.of(context).colorScheme.onErrorContainer),
-                ),
-                onDismissed: (_) => repo.deleteTask(t.id),
-                child: CheckboxListTile(
-                  value: t.done,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (v) {
-                    t.done = v ?? false;
-                    repo.updateTask(t);
-                  },
-                  title: Text(
-                    t.title,
-                    style: t.done
-                        ? const TextStyle(decoration: TextDecoration.lineThrough)
-                        : null,
-                  ),
-                  subtitle: t.dueAt != null ? Text(_formatDue(t.dueAt!)) : null,
-                ),
-              );
-            },
+            itemBuilder: (context, i) => _TaskTile(task: tasks[i]),
           );
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _addTask(context),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TaskEditScreen()),
+        ),
         child: const Icon(Icons.add),
       ),
     );
   }
+}
 
-  static String _formatDue(DateTime d) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(d.day)}.${two(d.month)}.${d.year} ${two(d.hour)}:${two(d.minute)}';
-  }
+class _TaskTile extends StatelessWidget {
+  final Task task;
+  const _TaskTile({required this.task});
 
-  Future<void> _addTask(BuildContext context) async {
-    final controller = TextEditingController();
-    DateTime? due;
+  @override
+  Widget build(BuildContext context) {
     final repo = AppRepository.instance;
+    final scheme = Theme.of(context).colorScheme;
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Yeni görev'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Görev'),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      due == null ? 'Zaman belirlenmedi' : _formatDue(due!),
-                      style: Theme.of(ctx).textTheme.bodySmall,
-                    ),
-                  ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.schedule),
-                    label: const Text('Zaman'),
-                    onPressed: () async {
-                      final d = await showDatePicker(
-                        context: ctx,
-                        firstDate:
-                            DateTime.now().subtract(const Duration(days: 1)),
-                        lastDate: DateTime(2100),
-                        initialDate: DateTime.now(),
-                      );
-                      if (d == null || !ctx.mounted) return;
-                      final tt = await showTimePicker(
-                          context: ctx, initialTime: TimeOfDay.now());
-                      setLocal(() => due = DateTime(
-                          d.year, d.month, d.day, tt?.hour ?? 0, tt?.minute ?? 0));
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('İptal')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Ekle')),
-          ],
+    return Dismissible(
+      key: ValueKey(task.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        color: scheme.errorContainer,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: Icon(Icons.delete, color: scheme.onErrorContainer),
+      ),
+      onDismissed: (_) {
+        ImageStorage.delete(task.imagePath);
+        repo.deleteTask(task.id);
+      },
+      child: ListTile(
+        leading: Checkbox(
+          value: task.done,
+          onChanged: (v) {
+            task.done = v ?? false;
+            repo.updateTask(task);
+          },
+        ),
+        title: Text(
+          task.title,
+          style: task.done
+              ? const TextStyle(decoration: TextDecoration.lineThrough)
+              : null,
+        ),
+        subtitle: _buildSubtitle(context),
+        trailing: task.imagePath != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.file(
+                  File(task.imagePath!),
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.broken_image_outlined),
+                ),
+              )
+            : (task.note != null && task.note!.isNotEmpty
+                ? Icon(Icons.sticky_note_2_outlined, color: scheme.outline)
+                : null),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => TaskEditScreen(task: task)),
         ),
       ),
     );
+  }
 
-    if (result != true) return;
-    final title = controller.text.trim();
-    if (title.isEmpty) return;
-    await repo.addTask(Task(id: repo.newId(), title: title, dueAt: due));
+  Widget? _buildSubtitle(BuildContext context) {
+    final hasNote = task.note != null && task.note!.isNotEmpty;
+    final hasDue = task.dueAt != null;
+    if (!hasNote && !hasDue) return null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasDue)
+          Text(formatDateTime(task.dueAt!),
+              style: Theme.of(context).textTheme.bodySmall),
+        if (hasNote)
+          Text(task.note!, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
+    );
   }
 }
