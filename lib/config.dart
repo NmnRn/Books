@@ -7,7 +7,7 @@
 /// için kullanılır.
 class AppConfig {
   /// GitHub kullanıcı adın (örn: "numanerdem").
-  static const String githubOwner = 'CHANGE_ME';
+  static const String githubOwner = 'NmnRn';
 
   /// Repo adı (örn: "Books").
   static const String githubRepo = 'Books';
