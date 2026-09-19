@@ -29,11 +29,18 @@ class ImageStorage {
   }
 
   /// Verilen yoldaki fotoğrafı siler (varsa).
+  ///
+  /// Fotoğraf silme kritik değildir; ateşle-unut olarak çağrılabildiği için
+  /// hataları içeride yutar (yakalanmayan async exception oluşmaz).
   static Future<void> delete(String? path) async {
     if (path == null) return;
-    final f = File(path);
-    if (await f.exists()) {
-      await f.delete();
+    try {
+      final f = File(path);
+      if (await f.exists()) {
+        await f.delete();
+      }
+    } catch (_) {
+      // Dosya silinemezse sessizce geç.
     }
   }
 }

@@ -39,7 +39,7 @@ class UpdateService {
     final res = await http.get(
       uri,
       headers: {'Accept': 'application/vnd.github+json'},
-    );
+    ).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) return null; // henüz release yok olabilir
 
     final data = jsonDecode(res.body) as Map<String, dynamic>;

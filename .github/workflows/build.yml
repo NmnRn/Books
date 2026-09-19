@@ -36,6 +36,28 @@ jobs:
         run: flutter analyze
         continue-on-error: true
 
+      # Release imzalama anahtarını GitHub Secrets'tan kur.
+      # Secret yoksa debug anahtarıyla imzalanır (güncelleme uyumluluğu bozulabilir).
+      - name: İmzalama anahtarını hazırla
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::KEYSTORE_BASE64 secret bulunamadı — debug anahtarıyla imzalanacak."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          echo "Release imzalama anahtarı hazır."
+
       - name: APK derle (release)
         run: flutter build apk --release
 

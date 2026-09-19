@@ -207,6 +207,7 @@ class _BookSearchScreenState extends State<BookSearchScreen> {
                       final subtitle = [
                         if (r.authors.isNotEmpty) r.authors,
                         if (r.pageCount > 0) '${r.pageCount} sayfa',
+                        if (r.source.isNotEmpty) r.source,
                       ].join(' • ');
                       return ListTile(
                         leading:

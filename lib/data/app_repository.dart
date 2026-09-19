@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -80,5 +82,47 @@ class AppRepository {
   Future<void> deleteTask(String id) async {
     await _tasks.delete(id);
     _reloadTasks();
+  }
+
+  // ---------------- Yedekleme (JSON) ----------------
+
+  /// Tüm kitap ve görevleri okunabilir JSON metnine dönüştürür.
+  /// Not: Görev fotoğrafları (yerel dosyalar) yedeğe dahil edilmez.
+  String exportJson() {
+    final data = {
+      'app': 'okuma_defteri',
+      'schema': 1,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'books': books.value.map((b) => b.toMap()).toList(),
+      'tasks': tasks.value.map((t) => t.toMap()).toList(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(data);
+  }
+
+  /// JSON yedeğini geri yükler.
+  ///
+  /// [replace] true ise mevcut tüm veri silinip yerine yüklenir;
+  /// false ise id'ye göre birleştirilir (aynı id üzerine yazılır, yenisi eklenir).
+  /// Yüklenen toplam kayıt sayısını döndürür.
+  Future<int> importJson(String source, {required bool replace}) async {
+    final data = jsonDecode(source) as Map<String, dynamic>;
+    final bookList = (data['books'] as List?) ?? const [];
+    final taskList = (data['tasks'] as List?) ?? const [];
+
+    if (replace) {
+      await _books.clear();
+      await _tasks.clear();
+    }
+    for (final raw in bookList) {
+      final book = Book.fromMap((raw as Map).cast<String, dynamic>());
+      await _books.put(book.id, book.toJson());
+    }
+    for (final raw in taskList) {
+      final task = Task.fromMap((raw as Map).cast<String, dynamic>());
+      await _tasks.put(task.id, task.toJson());
+    }
+    _reloadBooks();
+    _reloadTasks();
+    return bookList.length + taskList.length;
   }
 }

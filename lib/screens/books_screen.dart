@@ -5,6 +5,7 @@ import '../models/book.dart';
 import '../widgets/book_cover.dart';
 import 'book_detail_screen.dart';
 import 'book_search_screen.dart';
+import 'settings_screen.dart';
 
 /// Kitaplık ekranı: Okunuyor / Okunacak / Okundu sekmeleri.
 class BooksScreen extends StatelessWidget {
@@ -18,6 +19,16 @@ class BooksScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Kitaplığım'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Ayarlar',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
+            ),
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Okunuyor'),
