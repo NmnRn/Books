@@ -58,8 +58,31 @@ flutter build apk --release
 > ⚠️ Güncelleme kontrolünün çalışması için `lib/config.dart` içindeki
 > `githubOwner` ve `githubRepo` değerlerini doldurman gerekir.
 
-## 🔑 Notlar
+## 🔎 Kitap arama kaynakları
 
-- Release APK şimdilik **debug anahtarıyla** imzalanır (yan yüklemeye uygun).
-  Play Store için kendi imza yapılandırmanı eklemelisin.
-- Google Books API ücretsizdir ve anahtar gerektirmez.
+Arama, dört kaynağı paralel sorgular ve sonuçları birleştirir:
+Google Books, Open Library, Internet Archive, Apple Books. Biri hata verse
+(ör. Google kotası) diğerleri sonuç döndürür.
+
+### Google Books'u kotasız yapmak (opsiyonel)
+
+Anahtarsızken Google Books paylaşılan bir günlük kotaya tabidir ve sık sık
+`429` döndürür. Kendi ücretsiz anahtarınla bu sorun biter (kod ve CI hazır):
+
+1. https://console.cloud.google.com → yeni proje oluştur
+2. **APIs & Services → Library → "Books API"** → Enable
+3. **APIs & Services → Credentials → Create credentials → API key** (kredi kartı gerekmez)
+4. GitHub: repo → **Settings → Secrets and variables → Actions → New repository secret**
+   - Name: `GOOGLE_BOOKS_API_KEY`, Value: (aldığın anahtar)
+5. Yeni bir sürüm etiketi at (`git tag vX.Y.Z && git push origin vX.Y.Z`)
+
+Yerelde denemek için: `flutter run --dart-define=GOOGLE_BOOKS_API_KEY=ANAHTAR`
+
+## 🔑 İmzalama
+
+- Release APK'lar CI'da **sabit release anahtarıyla** imzalanır (GitHub Secrets:
+  `KEYSTORE_BASE64`, `STORE_PASSWORD`, `KEY_PASSWORD`, `KEY_ALIAS`).
+  Böylece güncellemeler eskinin üstüne kurulur ve **veri korunur**.
+- Keystore ve `android/key.properties` **asla commit'lenmez** (gitignore'da).
+  Bu dosyaları ve parolayı güvenli bir yerde sakla — kaybedersen aynı anahtarla
+  güncelleme yayınlayamazsın.
